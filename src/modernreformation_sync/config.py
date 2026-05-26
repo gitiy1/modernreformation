@@ -60,6 +60,7 @@ class SourceConfig(BaseModel):
     sanity_api_version: str = "2023-07-20"
     limit: int = Field(default=10, ge=1)
     resource_types: list[str] = Field(default_factory=list)
+    include_state_articles: bool = True
 
 
 class TranslationConfig(BaseModel):
@@ -100,7 +101,9 @@ class ReadeckConfig(BaseModel):
     collection_name: str = "Modern Reformation"
     keep: int = Field(default=30, ge=0)
     archive_before_delete: bool = False
+    existing_policy: Literal["replace", "patch_metadata", "skip"] = "replace"
     image_mode: Literal["multipart", "remote"] = "multipart"
+    allowed_image_hosts: list[str] = Field(default_factory=lambda: ["cdn.sanity.io"])
     max_image_count: int = Field(default=12, ge=0)
     max_image_bytes: int = Field(default=5_000_000, ge=1)
     max_total_image_bytes: int = Field(default=30_000_000, ge=1)

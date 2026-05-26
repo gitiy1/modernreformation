@@ -9,12 +9,16 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from tempfile import TemporaryFile
 
+from dateutil.parser import isoparse
+
 from modernreformation_sync.builder import prepare_articles, write_static_site
 from modernreformation_sync.config import AppConfig, load_config, load_env_file
 from modernreformation_sync.readeck import ReadeckClient, maybe_push_to_readeck
 from modernreformation_sync.sanity import SanityClient
 from modernreformation_sync.state import JsonStore
 from modernreformation_sync.translator import maybe_translate_articles
+
+logger = logging.getLogger(__name__)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -65,7 +69,44 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def fetch_articles(config: AppConfig):
-    return SanityClient(config.source).fetch_latest()
+    client = SanityClient(config.source)
+    latest = client.fetch_latest()
+    if not config.source.include_state_articles:
+        return latest
+
+    store = JsonStore(config.site.state_file)
+    previous_entries = store.get("latest", [])
+    previous_slugs = [
+        str(entry.get("slug") or "")
+        for entry in previous_entries
+        if isinstance(entry, dict) and entry.get("slug")
+    ]
+    previous_dates = [
+        isoparse(str(entry["published"]))
+        for entry in previous_entries
+        if isinstance(entry, dict) and entry.get("published")
+    ]
+
+    articles_by_slug = {article.slug: article for article in latest}
+    if previous_dates:
+        try:
+            for article in client.fetch_since(max(previous_dates)):
+                articles_by_slug[article.slug] = article
+        except Exception:
+            logger.exception("Could not fetch incremental articles; continuing with latest window")
+
+    for slug in previous_slugs:
+        if slug in articles_by_slug:
+            continue
+        try:
+            article = client.fetch_by_slug(slug)
+        except Exception:
+            logger.exception("Could not refresh state article %s; omitting it", slug)
+            continue
+        if article:
+            articles_by_slug[article.slug] = article
+
+    return sorted(articles_by_slug.values(), key=lambda article: article.publish_date, reverse=True)
 
 
 def build_articles(articles, config: AppConfig) -> dict[str, str]:

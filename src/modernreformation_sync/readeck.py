@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import ipaddress
 import logging
 from dataclasses import dataclass
 from html.parser import HTMLParser
@@ -28,6 +29,7 @@ class Bookmark:
     url: str
     title: str
     created: str
+    labels: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -86,17 +88,23 @@ class ReadeckClient:
             "html": html,
         }
         if existing:
-            self._request(
-                "PATCH",
-                f"/api/bookmarks/{existing.id}",
-                json={
-                    "title": payload["title"],
-                    "labels": payload["labels"],
-                    "published": article.publish_date.isoformat(),
-                },
-            )
-            logger.info("Readeck bookmark already exists: %s", article.url)
-            return existing.id
+            if self.config.existing_policy == "skip":
+                logger.info("Skipping existing Readeck bookmark: %s", article.url)
+                return existing.id
+            if self.config.existing_policy == "patch_metadata":
+                self._request(
+                    "PATCH",
+                    f"/api/bookmarks/{existing.id}",
+                    json={
+                        "title": payload["title"],
+                        "labels": payload["labels"],
+                        "published": article.publish_date.isoformat(),
+                    },
+                )
+                logger.info("Updated Readeck bookmark metadata: %s", article.url)
+                return existing.id
+            self._request("DELETE", f"/api/bookmarks/{existing.id}")
+            logger.info("Replacing Readeck bookmark: %s", article.url)
         if self.config.image_mode == "multipart":
             response = self._post_bookmark_multipart(payload, html)
         else:
@@ -118,7 +126,7 @@ class ReadeckClient:
 
     def find_bookmark_by_url(self, url: str) -> Bookmark | None:
         for bookmark in self.list_synced_bookmarks(per_page=100):
-            if bookmark.url == url:
+            if bookmark.url == url and self._is_synced_bookmark(bookmark):
                 return bookmark
         return None
 
@@ -143,6 +151,7 @@ class ReadeckClient:
                     url=item.get("url") or "",
                     title=item.get("title") or "",
                     created=item.get("created") or "",
+                    labels=tuple(str(label) for label in item.get("labels") or []),
                 )
                 for item in payload
             )
@@ -155,7 +164,8 @@ class ReadeckClient:
         if keep <= 0:
             return []
         bookmarks = self.list_synced_bookmarks()
-        stale = bookmarks[keep:]
+        owned = [bookmark for bookmark in bookmarks if self._is_synced_bookmark(bookmark)]
+        stale = owned[keep:]
         removed = []
         for bookmark in stale:
             if self.config.archive_before_delete:
@@ -173,6 +183,14 @@ class ReadeckClient:
             if item.get("name") == name:
                 return item
         return None
+
+    def _is_synced_bookmark(self, bookmark: Bookmark) -> bool:
+        labels = set(bookmark.labels)
+        return (
+            bookmark.url.startswith("https://www.modernreformation.org/resources/")
+            and self.config.label in labels
+            and self.config.translated_label in labels
+        )
 
     def _post_bookmark_multipart(
         self,
@@ -216,7 +234,8 @@ class ReadeckClient:
         resources: list[ImageResource] = []
         total_bytes = 0
         for url in extract_image_urls(html)[: self.config.max_image_count]:
-            if not is_http_url(url):
+            if not is_allowed_image_url(url, self.config.allowed_image_hosts):
+                logger.warning("Skipping image from untrusted URL %s", url)
                 continue
             try:
                 response = self.client.get(url, follow_redirects=True)
@@ -224,10 +243,18 @@ class ReadeckClient:
             except httpx.HTTPError as exc:
                 logger.warning("Could not download image %s: %s", url, exc)
                 continue
+            if not is_allowed_image_url(str(response.url), self.config.allowed_image_hosts):
+                logger.warning("Skipping image redirected to untrusted URL %s", response.url)
+                continue
             content_type = response.headers.get("content-type", "").split(";", 1)[0].strip()
             if content_type not in ALLOWED_IMAGE_TYPES:
                 logger.warning("Skipping unsupported image type %s for %s", content_type, url)
                 continue
+            content_length = response.headers.get("content-length")
+            if content_length and content_length.isdigit():
+                if int(content_length) > self.config.max_image_bytes:
+                    logger.warning("Skipping oversized image %s by Content-Length", url)
+                    continue
             content = response.content
             if len(content) > self.config.max_image_bytes:
                 logger.warning("Skipping oversized image %s (%d bytes)", url, len(content))
@@ -269,6 +296,32 @@ def extract_image_urls(html: str) -> list[str]:
 
 def is_http_url(url: str) -> bool:
     return urlparse(url).scheme in {"http", "https"}
+
+
+def is_allowed_image_url(url: str, allowed_hosts: list[str]) -> bool:
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        return False
+    host = parsed.hostname.rstrip(".").lower()
+    if is_private_host(host):
+        return False
+    normalized_allowed = {item.rstrip(".").lower() for item in allowed_hosts}
+    return host in normalized_allowed
+
+
+def is_private_host(host: str) -> bool:
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return host in {"localhost", "localhost.localdomain"}
+    return (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_multicast
+        or ip.is_reserved
+        or ip.is_unspecified
+    )
 
 
 def maybe_push_to_readeck(

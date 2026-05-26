@@ -6,6 +6,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from typing import Any, ClassVar
+from urllib.parse import urlparse
 
 from modernreformation_sync.models import Article, PortableBlock
 
@@ -261,6 +262,8 @@ def apply_mark(
     mark_def = mark_defs.get(mark)
     if mark_def and mark_def.get("_type") == "link":
         href = str(mark_def.get("href") or "")
+        if not is_safe_url(href):
+            return text
         return f'<a href="{escape_attr(href)}">{text}</a>'
     if mark_def and mark_def.get("_type") == "footnote" and state is not None:
         note_html = render_footnote_note(mark_def.get("note"))
@@ -369,6 +372,68 @@ def html_to_text(value: str) -> str:
 
 class UnsafeHtmlStripper(HTMLParser):
     blocked_tags: ClassVar[set[str]] = {"script", "style", "iframe", "object", "embed"}
+    allowed_tags: ClassVar[set[str]] = {
+        "a",
+        "abbr",
+        "b",
+        "blockquote",
+        "br",
+        "caption",
+        "cite",
+        "code",
+        "col",
+        "colgroup",
+        "dd",
+        "del",
+        "div",
+        "dl",
+        "dt",
+        "em",
+        "figcaption",
+        "figure",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "hr",
+        "i",
+        "img",
+        "li",
+        "ol",
+        "p",
+        "pre",
+        "s",
+        "section",
+        "span",
+        "strong",
+        "sub",
+        "sup",
+        "table",
+        "tbody",
+        "td",
+        "tfoot",
+        "th",
+        "thead",
+        "tr",
+        "u",
+        "ul",
+    }
+    allowed_attrs: ClassVar[set[str]] = {
+        "alt",
+        "class",
+        "colspan",
+        "height",
+        "href",
+        "id",
+        "rel",
+        "rowspan",
+        "src",
+        "target",
+        "title",
+        "width",
+    }
     safe_url_attrs: ClassVar[set[str]] = {"href", "src"}
 
     def __init__(self) -> None:
@@ -377,19 +442,26 @@ class UnsafeHtmlStripper(HTMLParser):
         self.blocked_depth = 0
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        if tag.lower() in self.blocked_tags:
+        tag_name = tag.lower()
+        if tag_name in self.blocked_tags:
             self.blocked_depth += 1
             return
         if self.blocked_depth:
             return
+        if tag_name not in self.allowed_tags:
+            return
         self.output += self.get_starttag_text_with_safe_attrs(tag, attrs)
 
     def handle_endtag(self, tag: str) -> None:
-        if tag.lower() in self.blocked_tags:
+        tag_name = tag.lower()
+        if tag_name in self.blocked_tags:
             self.blocked_depth = max(self.blocked_depth - 1, 0)
             return
-        if not self.blocked_depth:
+        if not self.blocked_depth and tag_name in self.allowed_tags:
             self.output += f"</{tag}>"
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.handle_starttag(tag, attrs)
 
     def handle_data(self, data: str) -> None:
         if not self.blocked_depth:
@@ -411,14 +483,14 @@ class UnsafeHtmlStripper(HTMLParser):
         rendered_attrs = []
         for name, value in attrs:
             attr_name = name.lower()
+            if attr_name not in self.allowed_attrs:
+                continue
             if attr_name.startswith("on"):
                 continue
             if value is None:
                 rendered_attrs.append(attr_name)
                 continue
-            if attr_name in self.safe_url_attrs and value.strip().lower().startswith(
-                ("javascript:", "data:")
-            ):
+            if attr_name in self.safe_url_attrs and not is_safe_url(value):
                 continue
             rendered_attrs.append(f'{attr_name}="{escape_attr(value)}"')
         suffix = f" {' '.join(rendered_attrs)}" if rendered_attrs else ""
@@ -442,3 +514,8 @@ def escape(value: str) -> str:
 
 def escape_attr(value: str) -> str:
     return html.escape(value, quote=True)
+
+
+def is_safe_url(value: str) -> bool:
+    parsed = urlparse(value.strip())
+    return parsed.scheme.lower() in {"", "http", "https", "mailto"}

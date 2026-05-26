@@ -16,6 +16,7 @@ from modernreformation_sync.models import Article, PortableBlock
 from modernreformation_sync.render import (
     render_portable_text,
     render_resource_metadata,
+    strip_unsafe_embedded_html,
     text_from_blocks,
 )
 
@@ -197,6 +198,8 @@ class OpenAITranslator:
                 context=context,
             )
             cached = self.cache.get(digest)
+            if cached is not None and text_type == "html":
+                cached = sanitize_translated_html(cached)
             results.append(cached)
             if cached is None:
                 missing.append((index, text, digest))
@@ -215,11 +218,15 @@ class OpenAITranslator:
                     context=context,
                 )
                 for (index, _text, digest), translated in zip(batch, batch_results, strict=True):
+                    if text_type == "html":
+                        translated = sanitize_translated_html(translated)
                     self.cache.set(digest, translated)
                     results[index] = translated
         else:
             for index, text, digest in missing:
                 translated = self._translate_with_budget(text, text_type=text_type, context=context)
+                if text_type == "html":
+                    translated = sanitize_translated_html(translated)
                 self.cache.set(digest, translated)
                 results[index] = translated
 
@@ -519,6 +526,10 @@ def clean_model_output(text: str) -> str:
     if fenced:
         cleaned = fenced.group(1).strip()
     return cleaned
+
+
+def sanitize_translated_html(text: str) -> str:
+    return strip_unsafe_embedded_html(text).strip()
 
 
 def load_bible_index(config: BibleConfig | None) -> BibleIndex | None:

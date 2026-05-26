@@ -21,6 +21,11 @@ The default pipeline:
 4. Writes static HTML plus `feed.xml` and `feed.zh.xml`.
 5. Optionally pushes bilingual HTML to Readeck and prunes older synced bookmarks.
 
+When `.mr-sync/state.json` already exists, the fetch step also asks Sanity for articles newer
+than the last stored publication date and refreshes previously stored slugs. This keeps older
+generated pages in the local RSS/site instead of shrinking every run back to the latest window.
+Set `source.include_state_articles: false` for a stateless latest-only run.
+
 ## Environment
 
 For local debugging, copy `.env.example` to `.env`. The CLI loads `.env` by default before
@@ -94,7 +99,15 @@ gives Readeck the best chance to archive images into exports such as EPUB. Set
 `image_mode: "remote"` to send JSON HTML with remote image URLs only.
 
 Image downloads are bounded by `max_image_count`, `max_image_bytes`, and
-`max_total_image_bytes`; failed image downloads are logged and do not stop article upload.
+`max_total_image_bytes`; failed image downloads are logged and do not stop article upload. By
+default only `cdn.sanity.io` images are downloaded; add hosts to `allowed_image_hosts` only when
+they are trusted.
+
+Existing synced bookmarks are controlled by `existing_policy`. The default `replace` recreates
+owned Modern Reformation bookmarks so HTML, images, and EPUB exports can reflect renderer or
+translation changes. `patch_metadata` preserves the old article body and only updates labels and
+metadata; `skip` leaves existing bookmarks untouched. Automatic prune only removes bookmarks
+that have both configured sync labels and a Modern Reformation resource URL.
 
 ## GitHub Actions
 

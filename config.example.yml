@@ -11,6 +11,7 @@ source:
   sanity_dataset: "production"
   sanity_api_version: "2023-07-20"
   limit: 10
+  include_state_articles: true
   resource_types:
     - essays
     - interviews
@@ -50,7 +51,10 @@ readeck:
   collection_name: "Modern Reformation"
   keep: 30
   archive_before_delete: false
+  existing_policy: "replace"
   image_mode: "multipart"
+  allowed_image_hosts:
+    - cdn.sanity.io
   max_image_count: 12
   max_image_bytes: 5000000
   max_total_image_bytes: 30000000

@@ -59,6 +59,21 @@ class SanityClient:
         result = self._query(query, params)
         return [parse_article(item) for item in result]
 
+    def fetch_since(self, since: datetime) -> list[Article]:
+        type_filter = ""
+        params: dict[str, Any] = {"since": since.isoformat()}
+        if self.config.resource_types:
+            type_filter = " && resource_type->slug.current in $types"
+            params["types"] = self.config.resource_types
+
+        query = (
+            f'*[_type == "resource" && title != null && publish_date < now() '
+            f"&& publish_date > $since{type_filter}] "
+            f"| order(publish_date desc) {{{RESOURCE_FIELDS}}}"
+        )
+        result = self._query(query, params)
+        return [parse_article(item) for item in result]
+
     def fetch_by_slug(self, slug: str) -> Article | None:
         query = (
             '*[_type == "resource" && slug.current == $slug && publish_date < now()][0]'

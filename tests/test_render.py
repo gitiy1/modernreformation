@@ -102,6 +102,34 @@ def test_render_portable_text_skips_script_embedded_html() -> None:
     assert html == ""
 
 
+def test_render_portable_text_strips_unsafe_links_and_embedded_attrs() -> None:
+    html = render_portable_text(
+        [
+            {
+                "_type": "block",
+                "style": "normal",
+                "children": [{"text": "bad link", "marks": ["link"]}],
+                "markDefs": [{"_key": "link", "_type": "link", "href": "javascript:alert(1)"}],
+            },
+            {
+                "_type": "embedded_HTML",
+                "embed": (
+                    '<table style="color:red"><tr onclick="x()"><td>'
+                    '<a href="javascript:alert(1)" style="color:red">x</a>'
+                    "</td></tr></table>"
+                ),
+                "isScript": False,
+            },
+        ]
+    )
+
+    assert "javascript:" not in html
+    assert "onclick" not in html
+    assert "style=" not in html
+    assert "<p>bad link</p>" in html
+    assert "<a style=" not in html
+
+
 def test_render_portable_text_renders_footnotes_with_backlinks() -> None:
     html = render_portable_text(
         [

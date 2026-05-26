@@ -1,4 +1,5 @@
 import json
+from datetime import UTC, datetime
 
 import httpx
 
@@ -78,3 +79,33 @@ def test_parse_article_allows_primary_topic_without_secondary_topics() -> None:
     articles = sanity.fetch_latest()
 
     assert [topic.title for topic in articles[0].topics] == ["Grace"]
+
+
+def test_fetch_since_uses_publish_date_cursor() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        params = dict(request.url.params)
+        assert "publish_date > $since" in params["query"]
+        assert json.loads(params["$since"]) == "2026-05-20T00:00:00+00:00"
+        return httpx.Response(
+            200,
+            json={
+                "result": [
+                    {
+                        "title": "New",
+                        "slug": "essays/new",
+                        "publish_date": "2026-05-21T00:00:00.000Z",
+                        "resource_type": {"name": "Essays", "slug": "essays"},
+                        "author": [],
+                        "excerpt": [],
+                        "resource_content": [],
+                    }
+                ]
+            },
+        )
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    sanity = SanityClient(SourceConfig(limit=1), client=client)
+
+    articles = sanity.fetch_since(datetime(2026, 5, 20, tzinfo=UTC))
+
+    assert [article.slug for article in articles] == ["essays/new"]

@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from email.utils import format_datetime
 from pathlib import Path
+from urllib.parse import quote
 from xml.etree import ElementTree as ET
 
 from modernreformation_sync.config import SiteConfig
 from modernreformation_sync.models import Article
-from modernreformation_sync.render import escape, text_from_blocks
+from modernreformation_sync.render import text_from_blocks
 
 ET.register_namespace("content", "http://purl.org/rss/1.0/modules/content/")
 
@@ -56,4 +57,4 @@ def article_public_url(article: Article, config: SiteConfig) -> str:
 
 
 def escape_slug(slug: str) -> str:
-    return escape(slug.strip("/").replace("/", "__"))
+    return quote(slug.strip("/").replace("/", "__"), safe="")

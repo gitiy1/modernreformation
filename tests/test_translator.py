@@ -17,6 +17,7 @@ from modernreformation_sync.translator import (
     clean_model_output,
     contains_bible_reference,
     maybe_translate_articles,
+    sanitize_translated_html,
 )
 
 
@@ -40,6 +41,14 @@ def test_translation_cache_cleans_legacy_reasoning(tmp_path: Path) -> None:
     )
 
     assert cache.get("abc") == "译文"
+
+
+def test_sanitize_translated_html_removes_active_content() -> None:
+    html = sanitize_translated_html(
+        '<p onclick="x()">译文</p><a href="javascript:alert(1)">bad</a><script>x()</script>'
+    )
+
+    assert html == "<p>译文</p><a>bad</a>"
 
 
 def test_build_bilingual_html_places_full_original_after_translation_without_images() -> None:
