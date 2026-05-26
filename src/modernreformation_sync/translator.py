@@ -488,6 +488,11 @@ def maybe_translate_articles(
         return
     if not config.api_keys:
         raise ValueError("translation.enabled is true but api_key/api_keys is empty")
+    if not config.base_url:
+        raise ValueError(
+            "translation.enabled is true but base_url is empty; set OPENAI_BASE_URL "
+            "as a GitHub Actions variable or secret"
+        )
 
     translator = OpenAITranslator(
         config,

@@ -255,6 +255,15 @@ def test_budget_fail_raises(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
         )
 
 
+def test_translation_enabled_requires_base_url(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="base_url is empty"):
+        maybe_translate_articles(
+            [make_article("first")],
+            TranslationConfig(enabled=True, api_key="key", base_url=""),
+            tmp_path,
+        )
+
+
 class FakeTranslator(OpenAITranslator):
     def __init__(self, config: TranslationConfig, cache_dir: Path) -> None:
         super().__init__(config, cache=DummyCache(cache_dir))
