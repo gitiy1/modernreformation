@@ -55,6 +55,7 @@ jobs:
           TRANSLATION_ENABLED: ${{ vars.TRANSLATION_ENABLED || 'true' }}
           READECK_ENABLED: ${{ vars.READECK_ENABLED || 'false' }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_API_KEYS: ${{ secrets.OPENAI_API_KEYS }}
           OPENAI_BASE_URL: ${{ vars.OPENAI_BASE_URL }}
           READECK_BASE_URL: ${{ vars.READECK_BASE_URL }}
           READECK_TOKEN: ${{ secrets.READECK_TOKEN }}
