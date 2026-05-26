@@ -1,0 +1,61 @@
+site:
+  title: "Modern Reformation Bilingual"
+  description: "Bilingual Modern Reformation articles for e-readers."
+  base_url: "${SITE_BASE_URL}"
+  output_dir: "public"
+  state_file: ".mr-sync/state.json"
+  cache_dir: ".mr-sync/cache"
+
+source:
+  sanity_project_id: "sxo7ym47"
+  sanity_dataset: "production"
+  sanity_api_version: "2023-07-20"
+  limit: 10
+  resource_types:
+    - essays
+    - interviews
+    - poems
+    - book-reviews
+    - letters
+    - articles
+
+translation:
+  enabled: "${TRANSLATION_ENABLED:-true}"
+  provider: "openai"
+  api_key: "${OPENAI_API_KEY}"
+  base_url: "${OPENAI_BASE_URL}"
+  model: "gemma-4-31b-it"
+  target_language: "Simplified Chinese"
+  request_interval_seconds: 4
+  rpm: 15
+  max_requests_per_run: 0
+  chunk_chars: 12000
+  batch_enabled: true
+  batch_separator: "%%"
+  max_batch_items: 8
+  max_batch_chars: 80000
+  budget_exceeded: "fail"
+  max_retries: 3
+  base_retry_delay_seconds: 2
+  reasoning_effort: "high"
+  max_completion_tokens: 32768
+  temperature: 0.2
+
+readeck:
+  enabled: "${READECK_ENABLED:-false}"
+  base_url: "${READECK_BASE_URL}"
+  token: "${READECK_TOKEN}"
+  label: "modern-reformation"
+  translated_label: "translated"
+  collection_name: "Modern Reformation"
+  keep: 30
+  archive_before_delete: false
+  image_mode: "multipart"
+  max_image_count: 12
+  max_image_bytes: 5000000
+  max_total_image_bytes: 30000000
+  request_timeout_seconds: 120
+
+bible:
+  enabled: true
+  usfx_zip_path: ".mr-sync/cache/cmn-cu89s_usfx.zip"

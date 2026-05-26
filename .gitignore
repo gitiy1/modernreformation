@@ -1,0 +1,10 @@
+references/
+.mr-sync/
+.uv-cache/
+.venv/
+public/
+__pycache__/
+*.pyc
+.env
+.env.*
+!.env.example

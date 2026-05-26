@@ -1,0 +1,40 @@
+[project]
+name = "modernreformation-sync"
+version = "0.1.0"
+description = "Build bilingual Modern Reformation feeds and optionally push them to Readeck."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.28.1",
+    "openai>=1.82.0",
+    "pydantic>=2.11.0",
+    "python-dateutil>=2.9.0.post0",
+    "pyyaml>=6.0.2",
+]
+
+[project.scripts]
+mr-sync = "modernreformation_sync.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.5",
+    "pytest-httpx>=0.35.0",
+    "ruff>=0.11.12",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "RUF"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/modernreformation_sync"]

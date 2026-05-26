@@ -1,0 +1,74 @@
+name: Sync Modern Reformation
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 20 * * *"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Restore translation cache
+        uses: actions/cache@v5
+        with:
+          path: .mr-sync/cache
+          key: mr-sync-translation-cache-${{ github.run_id }}
+          restore-keys: |
+            mr-sync-translation-cache-
+
+      - name: Download Bible source
+        run: |
+          mkdir -p .mr-sync/cache
+          test -f .mr-sync/cache/cmn-cu89s_usfx.zip || curl -fsSL \
+            -o .mr-sync/cache/cmn-cu89s_usfx.zip \
+            https://ebible.org/Scriptures/cmn-cu89s_usfx.zip
+
+      - name: Build feeds and sync Readeck
+        env:
+          TRANSLATION_ENABLED: ${{ vars.TRANSLATION_ENABLED || 'true' }}
+          READECK_ENABLED: ${{ vars.READECK_ENABLED || 'false' }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ vars.OPENAI_BASE_URL }}
+          READECK_BASE_URL: ${{ vars.READECK_BASE_URL }}
+          READECK_TOKEN: ${{ secrets.READECK_TOKEN }}
+          SITE_BASE_URL: ${{ vars.SITE_BASE_URL }}
+        run: uv run mr-sync --config config.example.yml run
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v6
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: public
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
