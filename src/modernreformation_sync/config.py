@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 ENV_PATTERN = re.compile(r"\$\{([A-Z0-9_]+)(?::-(.*?))?\}")
 
@@ -60,13 +60,14 @@ class SourceConfig(BaseModel):
     sanity_api_version: str = "2023-07-20"
     limit: int = Field(default=10, ge=1)
     resource_types: list[str] = Field(default_factory=list)
-    include_state_articles: bool = True
+    include_state_articles: bool = False
 
 
 class TranslationConfig(BaseModel):
     enabled: bool = False
     provider: str = "openai"
     api_key: str = ""
+    api_keys: list[str] = Field(default_factory=list)
     base_url: str = "https://api.openai.com/v1"
     model: str = "gpt-4.1-mini"
     target_language: str = "Simplified Chinese"
@@ -90,6 +91,21 @@ class TranslationConfig(BaseModel):
     @classmethod
     def trim_base_url(cls, value: str) -> str:
         return value.rstrip("/")
+
+    @field_validator("api_keys", mode="before")
+    @classmethod
+    def parse_api_keys(cls, value: object) -> object:
+        if isinstance(value, str):
+            return [item.strip() for item in re.split(r"[\n,]+", value) if item.strip()]
+        return value
+
+    @model_validator(mode="after")
+    def merge_api_key(self) -> TranslationConfig:
+        keys = [key for key in self.api_keys if key]
+        if self.api_key and self.api_key not in keys:
+            keys.insert(0, self.api_key)
+        self.api_keys = keys
+        return self
 
 
 class ReadeckConfig(BaseModel):

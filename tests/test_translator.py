@@ -51,6 +51,35 @@ def test_sanitize_translated_html_removes_active_content() -> None:
     assert html == "<p>译文</p><a>bad</a>"
 
 
+def test_translator_round_robins_multiple_api_keys(monkeypatch, tmp_path: Path) -> None:
+    used_keys: list[str] = []
+
+    class FakeCompletions:
+        def __init__(self, api_key: str) -> None:
+            self.api_key = api_key
+
+        def create(self, **kwargs: object) -> object:
+            used_keys.append(self.api_key)
+            return SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(content="<p>译文</p>"))]
+            )
+
+    class FakeOpenAI:
+        def __init__(self, *, api_key: str, base_url: str) -> None:
+            self.chat = SimpleNamespace(completions=FakeCompletions(api_key))
+
+    monkeypatch.setattr(translator_module, "OpenAI", FakeOpenAI)
+    translator = OpenAITranslator(
+        TranslationConfig(api_keys=["key-a", "key-b"]),
+        TranslationCache(tmp_path),
+    )
+
+    assert translator._request("a", text_type="html", context="", is_batch=False) == "<p>译文</p>"
+    assert translator._request("b", text_type="html", context="", is_batch=False) == "<p>译文</p>"
+    assert translator._request("c", text_type="html", context="", is_batch=False) == "<p>译文</p>"
+    assert used_keys == ["key-a", "key-b", "key-a"]
+
+
 def test_build_bilingual_html_places_full_original_after_translation_without_images() -> None:
     html = build_bilingual_html(
         translated_html='<p>中文一</p>\n<figure><img src="cover.png"></figure>\n<p>中文二</p>',

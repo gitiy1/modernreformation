@@ -21,10 +21,11 @@ The default pipeline:
 4. Writes static HTML plus `feed.xml` and `feed.zh.xml`.
 5. Optionally pushes bilingual HTML to Readeck and prunes older synced bookmarks.
 
-When `.mr-sync/state.json` already exists, the fetch step also asks Sanity for articles newer
-than the last stored publication date and refreshes previously stored slugs. This keeps older
-generated pages in the local RSS/site instead of shrinking every run back to the latest window.
-Set `source.include_state_articles: false` for a stateless latest-only run.
+By default each run is a fixed latest-window sync: `source.limit` controls how many articles are
+present in RSS/Pages, stale article HTML files are removed from `public/articles/`, and Readeck
+keeps `readeck.keep` owned bookmarks after pushing the current window. This keeps Action runs
+small: the normal path only fetches the latest Sanity window. Set `source.include_state_articles:
+true` only if you want to refresh and preserve slugs already recorded in `.mr-sync/state.json`.
 
 ## Environment
 
@@ -35,6 +36,8 @@ quick switches.
 
 ```bash
 export OPENAI_API_KEY="..."
+# Optional: comma-separated or newline-separated keys; requests rotate through them.
+export OPENAI_API_KEYS="key-a,key-b"
 export OPENAI_BASE_URL="https://openai-compatible.example/v1"
 export READECK_BASE_URL="https://readeck.example.org"
 export READECK_TOKEN="..."
@@ -73,6 +76,8 @@ front section only, so e-reader exports do not repeat images in the English sect
 
 Useful knobs in `translation`:
 
+- `api_key` is enough for one key; `api_keys` can hold a comma-separated, newline-separated, or
+  YAML list of keys, and translation requests rotate through them.
 - `request_interval_seconds` and `rpm` throttle free or rate-limited APIs.
 - `chunk_chars`, `batch_enabled`, `max_batch_items`, and `max_batch_chars` control request size.
   The example config is tuned for `gemma-4-31b-it`'s large context, using bigger chunks and
@@ -114,6 +119,7 @@ that have both configured sync labels and a Modern Reformation resource URL.
 Copy `.github/workflows/sync.yml` and set these repository secrets or variables:
 
 - `OPENAI_API_KEY`
+- `OPENAI_API_KEYS` if you want key rotation instead of a single key
 - `READECK_TOKEN` if Readeck push is enabled
 - `READECK_BASE_URL`
 - `SITE_BASE_URL`

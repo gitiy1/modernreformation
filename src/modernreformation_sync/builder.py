@@ -29,6 +29,10 @@ def write_static_site(articles: list[Article], config: AppConfig) -> dict[str, s
     articles_dir = config.site.output_dir / "articles"
     articles_dir.mkdir(parents=True, exist_ok=True)
     rendered: dict[str, str] = {}
+    expected_paths = {articles_dir / f"{escape_slug(article.slug)}.html" for article in articles}
+    for existing_path in articles_dir.glob("*.html"):
+        if existing_path not in expected_paths:
+            existing_path.unlink()
     for article in articles:
         html = render_article_html(article, bilingual=True)
         rendered[article.slug] = html

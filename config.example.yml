@@ -11,7 +11,7 @@ source:
   sanity_dataset: "production"
   sanity_api_version: "2023-07-20"
   limit: 10
-  include_state_articles: true
+  include_state_articles: false
   resource_types:
     - essays
     - interviews
@@ -24,6 +24,7 @@ translation:
   enabled: "${TRANSLATION_ENABLED:-true}"
   provider: "openai"
   api_key: "${OPENAI_API_KEY}"
+  api_keys: "${OPENAI_API_KEYS}"
   base_url: "${OPENAI_BASE_URL}"
   model: "gemma-4-31b-it"
   target_language: "Simplified Chinese"
@@ -49,7 +50,7 @@ readeck:
   label: "modern-reformation"
   translated_label: "translated"
   collection_name: "Modern Reformation"
-  keep: 30
+  keep: 10
   archive_before_delete: false
   existing_policy: "replace"
   image_mode: "multipart"

@@ -43,3 +43,19 @@ READECK_TOKEN="debug-token"
 
     assert os.environ["OPENAI_API_KEY"] == "from-shell"
     assert os.environ["READECK_TOKEN"] == "debug-token"
+
+
+def test_translation_api_keys_accept_comma_separated_env(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("OPENAI_API_KEYS", "key-a,key-b\nkey-c")
+    config_path = tmp_path / "config.yml"
+    config_path.write_text(
+        """
+translation:
+  api_keys: "${OPENAI_API_KEYS}"
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(config_path)
+
+    assert config.translation.api_keys == ["key-a", "key-b", "key-c"]

@@ -137,12 +137,21 @@ class OpenAITranslator:
         self.config = config
         self.cache = cache
         self.bible_index = bible_index
-        self.client = OpenAI(api_key=config.api_key, base_url=config.base_url)
+        self.clients = [
+            OpenAI(api_key=api_key, base_url=config.base_url)
+            for api_key in (config.api_keys or [config.api_key])
+        ]
+        self.client_index = 0
         self.limiter = RateLimiter(
             rpm=config.rpm,
             interval_seconds=config.request_interval_seconds,
         )
         self.request_count = 0
+
+    def next_client(self) -> OpenAI:
+        client = self.clients[self.client_index % len(self.clients)]
+        self.client_index += 1
+        return client
 
     def translate_article(self, article: Article) -> None:
         article.translated_title = self.translate_text(
@@ -384,7 +393,8 @@ class OpenAITranslator:
             kwargs["tools"] = [BIBLE_LOOKUP_TOOL]
             kwargs["tool_choice"] = "required" if contains_bible_reference(text) else "auto"
 
-        response = self.client.chat.completions.create(**kwargs)
+        client = self.next_client()
+        response = client.chat.completions.create(**kwargs)
         message = response.choices[0].message
         if getattr(message, "tool_calls", None):
             messages.append(message.model_dump(exclude_none=True))
@@ -393,7 +403,7 @@ class OpenAITranslator:
             kwargs["messages"] = messages
             kwargs.pop("tool_choice", None)
             kwargs.pop("tools", None)
-            response = self.client.chat.completions.create(**kwargs)
+            response = client.chat.completions.create(**kwargs)
             message = response.choices[0].message
         content = message.content
         return clean_model_output(content or "")
@@ -476,8 +486,8 @@ def maybe_translate_articles(
             article.translated_title = article.title
             article.translated_html = article.original_html
         return
-    if not config.api_key:
-        raise ValueError("translation.enabled is true but api_key is empty")
+    if not config.api_keys:
+        raise ValueError("translation.enabled is true but api_key/api_keys is empty")
 
     translator = OpenAITranslator(
         config,

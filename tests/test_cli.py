@@ -95,9 +95,37 @@ def test_fetch_articles_merges_latest_incremental_and_state_articles(
 
     monkeypatch.setattr(cli, "SanityClient", FakeSanityClient)
 
-    articles = cli.fetch_articles(AppConfig(site=SiteConfig(state_file=state_file)))
+    articles = cli.fetch_articles(
+        AppConfig(
+            site=SiteConfig(state_file=state_file),
+            source=SourceConfig(include_state_articles=True),
+        )
+    )
 
     assert [article.slug for article in articles] == ["essays/latest", "essays/new", "essays/old"]
+
+
+def test_fetch_articles_defaults_to_latest_window_only(monkeypatch) -> None:
+    latest = make_article("essays/latest", datetime(2026, 5, 27, tzinfo=UTC))
+
+    class FakeSanityClient:
+        def __init__(self, source: SourceConfig) -> None:
+            self.source = source
+
+        def fetch_latest(self) -> list[Article]:
+            return [latest]
+
+        def fetch_since(self, since: datetime) -> list[Article]:
+            raise AssertionError("stateless latest-window mode should not fetch since state")
+
+        def fetch_by_slug(self, slug: str) -> Article | None:
+            raise AssertionError("stateless latest-window mode should not refresh state slugs")
+
+    monkeypatch.setattr(cli, "SanityClient", FakeSanityClient)
+
+    articles = cli.fetch_articles(AppConfig())
+
+    assert [article.slug for article in articles] == ["essays/latest"]
 
 
 def make_article(
