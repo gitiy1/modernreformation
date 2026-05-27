@@ -100,6 +100,9 @@ def render_article_html(article: Article, *, bilingual: bool = True) -> str:
     .bilingual-translation {{ margin-top: 0.25rem; }}
     .bilingual-cell-original {{ color: #555; font-size: 0.9em; }}
     .bilingual-cell-translation {{ margin-top: 0.25rem; }}
+    .bilingual-meta-original, .bilingual-meta-translation {{ display: block; }}
+    .bilingual-meta-original {{ color: #555; }}
+    .bilingual-meta-translation {{ margin-top: 0.2rem; }}
     hr {{ border: 0; border-top: 1px solid #ccc; margin: 1.5rem 0; }}
   </style>
 </head>

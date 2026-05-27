@@ -200,8 +200,8 @@ class OpenAITranslator:
         originals = [
             rendered
             for rendered in (
-                render_portable_text([block], id_prefix=f"seg-{index}")
-                for index, block in enumerate(article.content, start=1)
+                render_portable_text(segment, id_prefix=f"seg-{index}")
+                for index, segment in enumerate(parallel_block_segments(article.content), start=1)
             )
             if rendered.strip()
         ]
@@ -550,6 +550,26 @@ def chunk_blocks(blocks: list[PortableBlock], max_chars: int) -> list[list[Porta
     return chunks
 
 
+def parallel_block_segments(blocks: list[PortableBlock]) -> list[list[PortableBlock]]:
+    segments: list[list[PortableBlock]] = []
+    current_list: list[PortableBlock] = []
+
+    def flush_list() -> None:
+        nonlocal current_list
+        if current_list:
+            segments.append(current_list)
+            current_list = []
+
+    for block in blocks:
+        if block.get("_type") == "block" and block.get("listItem"):
+            current_list.append(block)
+            continue
+        flush_list()
+        segments.append([block])
+    flush_list()
+    return segments
+
+
 def build_bilingual_html(translated_html: str, original_html: str) -> str:
     return f'{translated_html}\n<div class="original">\n{strip_images(original_html)}\n</div>'
 
@@ -566,6 +586,9 @@ def build_parallel_bilingual_html(translated_html: list[str], original_html: lis
 def build_parallel_block(original: str, translated: str) -> str:
     original = original.strip()
     translated = translated.strip()
+    metadata = merge_parallel_resource_metadata(original, translated)
+    if metadata:
+        return metadata
     table = interleave_table_cells(original, translated)
     if table:
         return table
@@ -579,6 +602,78 @@ def build_parallel_block(original: str, translated: str) -> str:
 
 
 CELL_RE = re.compile(r"(<(?P<tag>td|th)\b[^>]*>)(?P<body>.*?)(</(?P=tag)>)", re.I | re.S)
+RESOURCE_AUTHOR_RE = re.compile(
+    r'<div class="resource-author">(?P<body>.*?)</div>\s*</div>',
+    re.I | re.S,
+)
+RESOURCE_BIO_RE = re.compile(
+    r'<p class="resource-author-bio">(?P<body>.*?)</p>',
+    re.I | re.S,
+)
+RESOURCE_TOPICS_RE = re.compile(
+    r'<p class="(?P<class>resource-topics)">(?P<body>.*?)</p>',
+    re.I | re.S,
+)
+RESOURCE_DATE_RE = re.compile(
+    r'<p class="(?P<class>resource-date)">(?P<body>.*?)</p>',
+    re.I | re.S,
+)
+
+
+def merge_parallel_resource_metadata(original: str, translated: str) -> str:
+    if 'class="resource-meta"' not in original or 'class="resource-meta"' not in translated:
+        return ""
+    translated_authors = list(RESOURCE_AUTHOR_RE.finditer(translated))
+    author_index = 0
+
+    def replace_author(match: re.Match[str]) -> str:
+        nonlocal author_index
+        translated_author = (
+            translated_authors[author_index].group(0)
+            if author_index < len(translated_authors)
+            else ""
+        )
+        author_index += 1
+        translated_bio = extract_first_group(RESOURCE_BIO_RE, translated_author)
+        if not translated_bio:
+            return match.group(0)
+        original_author = match.group(0)
+        return RESOURCE_BIO_RE.sub(
+            (
+                r'<p class="resource-author-bio">'
+                r'<span class="bilingual-meta-original">\g<body></span>'
+                f'<span class="bilingual-meta-translation">{translated_bio}</span>'
+                r"</p>"
+            ),
+            original_author,
+            count=1,
+        )
+
+    merged = RESOURCE_AUTHOR_RE.sub(replace_author, original)
+    merged = merge_metadata_line(merged, translated, RESOURCE_TOPICS_RE)
+    merged = merge_metadata_line(merged, translated, RESOURCE_DATE_RE)
+    return merged
+
+
+def merge_metadata_line(original: str, translated: str, pattern: re.Pattern[str]) -> str:
+    translated_body = extract_first_group(pattern, translated)
+    if not translated_body:
+        return original
+
+    def replace_line(match: re.Match[str]) -> str:
+        return (
+            f'<p class="{match.group("class")}">'
+            f'<span class="bilingual-meta-original">{match.group("body").strip()}</span>'
+            f'<span class="bilingual-meta-translation">{translated_body}</span>'
+            "</p>"
+        )
+
+    return pattern.sub(replace_line, original, count=1)
+
+
+def extract_first_group(pattern: re.Pattern[str], value: str, group: str = "body") -> str:
+    match = pattern.search(value)
+    return match.group(group).strip() if match else ""
 
 
 def interleave_table_cells(original: str, translated: str) -> str:

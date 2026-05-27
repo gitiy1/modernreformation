@@ -14,11 +14,13 @@ from modernreformation_sync.translator import (
     TranslationCache,
     batch_split,
     build_bilingual_html,
+    build_parallel_block,
     build_parallel_bilingual_html,
     clean_model_output,
     contains_bible_reference,
     interleave_table_cells,
     maybe_translate_articles,
+    parallel_block_segments,
     sanitize_translated_html,
 )
 
@@ -136,6 +138,57 @@ def test_build_parallel_bilingual_html_interleaves_table_cells() -> None:
     assert '<div class="bilingual-cell-translation">中文 A</div>' in html
     assert '<div class="bilingual-cell-original"><strong>English B</strong></div>' in html
     assert '<div class="bilingual-cell-translation"><strong>中文 B</strong></div>' in html
+
+
+def test_build_parallel_block_merges_resource_metadata_cards() -> None:
+    original = (
+        '<section class="resource-meta">\n'
+        '<div class="resource-author"><div class="resource-author-portrait">'
+        '<img src="author.png" alt="Ronnie Brown"></div>'
+        '<div class="resource-author-copy"><p class="resource-author-name">Ronnie Brown</p>'
+        '<p class="resource-author-bio">English bio.</p></div></div>\n'
+        '<p class="resource-topics"><span class="resource-label">Topics</span> '
+        '<span class="topic">Baptism</span></p>\n'
+        '<p class="resource-date"><span class="resource-label">Date</span> May 26, 2026</p>\n'
+        "</section>"
+    )
+    translated = (
+        '<section class="resource-meta">\n'
+        '<div class="resource-author"><div class="resource-author-portrait">'
+        '<img src="author.png" alt="Ronnie Brown"></div>'
+        '<div class="resource-author-copy"><p class="resource-author-name">Ronnie Brown</p>'
+        '<p class="resource-author-bio">中文简介。</p></div></div>\n'
+        '<p class="resource-topics"><span class="resource-label">主题</span> '
+        '<span class="topic">洗礼</span></p>\n'
+        '<p class="resource-date"><span class="resource-label">日期</span> 2026年5月26日</p>\n'
+        "</section>"
+    )
+
+    html = build_parallel_block(original, translated)
+
+    assert html.count('<section class="resource-meta">') == 1
+    assert html.count('src="author.png"') == 1
+    assert '<span class="bilingual-meta-original">English bio.</span>' in html
+    assert '<span class="bilingual-meta-translation">中文简介。</span>' in html
+    assert (
+        '<span class="bilingual-meta-original"><span class="resource-label">Topics</span>' in html
+    )
+    assert (
+        '<span class="bilingual-meta-translation"><span class="resource-label">主题</span>' in html
+    )
+
+
+def test_parallel_block_segments_keeps_consecutive_list_items_together() -> None:
+    blocks = [
+        {"_type": "block", "children": [{"text": "Intro"}]},
+        {"_type": "block", "listItem": "number", "children": [{"text": "One"}]},
+        {"_type": "block", "listItem": "number", "children": [{"text": "Two"}]},
+        {"_type": "block", "children": [{"text": "After"}]},
+    ]
+
+    segments = parallel_block_segments(blocks)
+
+    assert segments == [[blocks[0]], [blocks[1], blocks[2]], [blocks[3]]]
 
 
 def test_translator_runs_bible_lookup_tool(tmp_path: Path) -> None:
