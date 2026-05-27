@@ -595,7 +595,10 @@ def build_parallel_block(original: str, translated: str) -> str:
     table = interleave_table_cells(original, translated)
     if table:
         return table
-    translated_without_repeated_images = strip_images(translated)
+    translated_without_repeated_images = ensure_translated_footnotes(
+        original,
+        strip_images(translated),
+    )
     return (
         '<div class="bilingual-block">'
         f'<div class="bilingual-original">{original}</div>'
@@ -605,6 +608,10 @@ def build_parallel_block(original: str, translated: str) -> str:
 
 
 CELL_RE = re.compile(r"(<(?P<tag>td|th)\b[^>]*>)(?P<body>.*?)(</(?P=tag)>)", re.I | re.S)
+INLINE_FOOTNOTE_RE = re.compile(
+    r'<sup class="footnote-ref">.*?</sup>\s*<span class="footnote-inline">.*?</span>',
+    re.I | re.S,
+)
 RESOURCE_AUTHOR_RE = re.compile(
     r'<div class="resource-author">(?P<body>.*?)</div>\s*</div>',
     re.I | re.S,
@@ -700,6 +707,17 @@ def interleave_table_cells(original: str, translated: str) -> str:
         )
 
     return CELL_RE.sub(replace_cell, translated)
+
+
+def ensure_translated_footnotes(original: str, translated: str) -> str:
+    original_notes = INLINE_FOOTNOTE_RE.findall(original)
+    translated_notes = INLINE_FOOTNOTE_RE.findall(translated)
+    missing = original_notes[len(translated_notes) :]
+    if not missing:
+        return translated
+    return f"{translated} " + " ".join(
+        f'<span class="translated-footnote-fallback">{note}</span>' for note in missing
+    )
 
 
 def clean_model_output(text: str) -> str:

@@ -18,6 +18,7 @@ from modernreformation_sync.translator import (
     build_parallel_block,
     clean_model_output,
     contains_bible_reference,
+    ensure_translated_footnotes,
     interleave_table_cells,
     maybe_translate_articles,
     parallel_block_segments,
@@ -207,6 +208,19 @@ def test_parallel_block_segments_keeps_consecutive_list_items_together() -> None
     segments = parallel_block_segments(blocks)
 
     assert segments == [[blocks[0]], [blocks[1], blocks[2]], [blocks[3]]]
+
+
+def test_ensure_translated_footnotes_adds_fallback_when_model_drops_note() -> None:
+    original = (
+        '<p>English<sup class="footnote-ref">1</sup> '
+        '<span class="footnote-inline">[1. Source note.]</span></p>'
+    )
+    translated = "<p>中文</p>"
+
+    html = ensure_translated_footnotes(original, translated)
+
+    assert '<span class="translated-footnote-fallback">' in html
+    assert '<span class="footnote-inline">[1. Source note.]</span>' in html
 
 
 def test_translator_runs_bible_lookup_tool(tmp_path: Path) -> None:
