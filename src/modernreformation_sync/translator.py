@@ -6,6 +6,7 @@ import logging
 import re
 import time
 from collections.abc import Iterable
+from html.parser import HTMLParser
 from pathlib import Path
 
 from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI
@@ -381,7 +382,9 @@ class OpenAITranslator:
                 "commentary. If the HTML contains resource metadata, translate visible author "
                 "bios and UI labels too: render `Topics` as `主题` and `Date` as `日期`, and "
                 "translate topic names when a natural Chinese theological equivalent is clear. "
-                "Preserve author names, image URLs, links, classes, ids, and dates. Do not "
+                "Preserve author names, image URLs, links, classes, ids, and dates. Use HTML "
+                "tags such as `<em>` and `<strong>` for emphasis; never use Markdown emphasis "
+                "like `*word*` or `**word**` inside the returned HTML. Do not "
                 "include reasoning, analysis, <thought> tags, markdown "
                 "fences, or notes. "
                 "When calling `lookup_bible`, pass structured fields: start_book, "
@@ -708,7 +711,52 @@ def clean_model_output(text: str) -> str:
 
 
 def sanitize_translated_html(text: str) -> str:
-    return strip_unsafe_embedded_html(text).strip()
+    return normalize_markdown_emphasis(strip_unsafe_embedded_html(text)).strip()
+
+
+def normalize_markdown_emphasis(html: str) -> str:
+    parser = MarkdownEmphasisNormalizer()
+    parser.feed(html)
+    parser.close()
+    return parser.output
+
+
+class MarkdownEmphasisNormalizer(HTMLParser):
+    emphasis_re = re.compile(r"(?<![A-Za-z0-9_])\*([^\s*][^*\n<>]{0,118}[^\s*])\*(?![A-Za-z0-9_])")
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=False)
+        self.output = ""
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attr_text = "".join(
+            f' {name}="{escape_html_attr(value)}"' if value is not None else f" {name}"
+            for name, value in attrs
+        )
+        self.output += f"<{tag}{attr_text}>"
+
+    def handle_endtag(self, tag: str) -> None:
+        self.output += f"</{tag}>"
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attr_text = "".join(
+            f' {name}="{escape_html_attr(value)}"' if value is not None else f" {name}"
+            for name, value in attrs
+        )
+        self.output += f"<{tag}{attr_text}>"
+
+    def handle_data(self, data: str) -> None:
+        self.output += self.emphasis_re.sub(r"<em>\1</em>", data)
+
+    def handle_entityref(self, name: str) -> None:
+        self.output += f"&{name};"
+
+    def handle_charref(self, name: str) -> None:
+        self.output += f"&#{name};"
+
+
+def escape_html_attr(value: str) -> str:
+    return value.replace("&", "&amp;").replace('"', "&quot;")
 
 
 def load_bible_index(config: BibleConfig | None) -> BibleIndex | None:

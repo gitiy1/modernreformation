@@ -55,6 +55,24 @@ def test_sanitize_translated_html_removes_active_content() -> None:
     assert html == "<p>译文</p><a>bad</a>"
 
 
+def test_sanitize_translated_html_converts_markdown_emphasis_in_text_nodes() -> None:
+    html = sanitize_translated_html(
+        "<p>必须*证明*的先决条件，且 "  # noqa: RUF001
+        '<a href="https://example.test/*x*">link</a></p>'
+    )
+
+    assert html == (
+        "<p>必须<em>证明</em>的先决条件，且 "  # noqa: RUF001
+        '<a href="https://example.test/*x*">link</a></p>'
+    )
+
+
+def test_sanitize_translated_html_avoids_common_literal_asterisks() -> None:
+    html = sanitize_translated_html("<p>Use a*b, 2 * x * y, and *.md literally.</p>")
+
+    assert html == "<p>Use a*b, 2 * x * y, and *.md literally.</p>"
+
+
 def test_translator_round_robins_multiple_api_keys(monkeypatch, tmp_path: Path) -> None:
     used_keys: list[str] = []
 
