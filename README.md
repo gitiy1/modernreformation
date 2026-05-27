@@ -70,14 +70,18 @@ result-count validation, retry, and fallback to individual chunk translation. Vi
 artifacts such as `<thought>...</thought>` and markdown fences are stripped before caching or
 rendering, so models that expose their scratchpad do not pollute RSS, Readeck, or EPUB output.
 
-The rendered bilingual body places the full Chinese translation first, then the full English
-original in a single trailing `Original` section. Header and body images remain with the Chinese
-front section only, so e-reader exports do not repeat images in the English section.
+The default bilingual layout is `parallel`: each rendered block is shown as English original
+first, then Chinese translation, while table cells are paired inside each `<td>` or `<th>` when
+the translated table preserves the same cell count. Set `bilingual_mode: "translation_first"` to
+place the full Chinese translation first, then the full English original in a single trailing
+`Original` section.
 
 Useful knobs in `translation`:
 
 - `api_key` is enough for one key; `api_keys` can hold a comma-separated, newline-separated, or
   YAML list of keys, and translation requests rotate through them.
+- `bilingual_mode` is `"parallel"` by default; use `"translation_first"` for full Chinese first
+  and full English afterward.
 - `request_interval_seconds` and `rpm` throttle free or rate-limited APIs.
 - `chunk_chars`, `batch_enabled`, `max_batch_items`, and `max_batch_chars` control request size.
   The example config is tuned for `gemma-4-31b-it`'s large context, using bigger chunks and

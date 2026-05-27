@@ -14,8 +14,10 @@ from modernreformation_sync.translator import (
     TranslationCache,
     batch_split,
     build_bilingual_html,
+    build_parallel_bilingual_html,
     clean_model_output,
     contains_bible_reference,
+    interleave_table_cells,
     maybe_translate_articles,
     sanitize_translated_html,
 )
@@ -107,6 +109,33 @@ def test_build_bilingual_html_keeps_author_image_in_original_metadata() -> None:
 
     assert '<figure><img src="cover.png"></figure>' not in html
     assert html.count('<img src="author.png">') == 2
+
+
+def test_build_parallel_bilingual_html_pairs_blocks_english_then_chinese() -> None:
+    html = build_parallel_bilingual_html(
+        translated_html=["<p>中文一</p>", "<h2>中文标题</h2>"],
+        original_html=["<p>English one</p>", "<h2>English heading</h2>"],
+    )
+
+    assert html == (
+        '<div class="bilingual-block"><div class="bilingual-original"><p>English one</p></div>'
+        '<div class="bilingual-translation"><p>中文一</p></div></div>\n'
+        '<div class="bilingual-block">'
+        '<div class="bilingual-original"><h2>English heading</h2></div>'
+        '<div class="bilingual-translation"><h2>中文标题</h2></div></div>'
+    )
+
+
+def test_build_parallel_bilingual_html_interleaves_table_cells() -> None:
+    html = interleave_table_cells(
+        "<table><tr><td>English A</td><td><strong>English B</strong></td></tr></table>",
+        "<table><tr><td>中文 A</td><td><strong>中文 B</strong></td></tr></table>",
+    )
+
+    assert '<div class="bilingual-cell-original">English A</div>' in html
+    assert '<div class="bilingual-cell-translation">中文 A</div>' in html
+    assert '<div class="bilingual-cell-original"><strong>English B</strong></div>' in html
+    assert '<div class="bilingual-cell-translation"><strong>中文 B</strong></div>' in html
 
 
 def test_translator_runs_bible_lookup_tool(tmp_path: Path) -> None:

@@ -71,6 +71,7 @@ class TranslationConfig(BaseModel):
     base_url: str = "https://api.openai.com/v1"
     model: str = "gpt-4.1-mini"
     target_language: str = "Simplified Chinese"
+    bilingual_mode: Literal["parallel", "translation_first"] = "parallel"
     request_interval_seconds: float = Field(default=0, ge=0)
     rpm: int = Field(default=0, ge=0)
     max_requests_per_run: int = Field(default=0, ge=0)

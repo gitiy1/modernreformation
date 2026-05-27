@@ -160,33 +160,52 @@ class OpenAITranslator:
             cache_namespace=f"title:{article.slug}",
             context=article_context(article),
         )
-        chunks = chunk_blocks(article.content, self.config.chunk_chars)
-        metadata_for_translation = render_resource_metadata(article)
-        metadata_for_display = render_resource_metadata(article)
-        originals_for_translation = [
-            *[
-                render_portable_text(chunk, id_prefix=f"tr-{index}")
-                for index, chunk in enumerate(chunks, start=1)
-            ],
-            metadata_for_translation,
-        ]
-        originals_for_display = [
-            *[
-                render_portable_text(chunk, id_prefix=f"orig-{index}")
-                for index, chunk in enumerate(chunks, start=1)
-            ],
-            metadata_for_display,
-        ]
+        originals_for_translation, originals_for_display = self.article_html_segments(article)
         translated = self.translate_many(
             originals_for_translation,
             text_type="html",
             cache_namespace=f"body:{article.slug}",
             context=article_context(article),
         )
-        article.translated_html = build_bilingual_html(
-            translated_html="\n".join(translated),
-            original_html="\n".join(originals_for_display),
-        )
+        if self.config.bilingual_mode == "translation_first":
+            article.translated_html = build_bilingual_html(
+                translated_html="\n".join(translated),
+                original_html="\n".join(originals_for_display),
+            )
+        else:
+            article.translated_html = build_parallel_bilingual_html(
+                translated, originals_for_display
+            )
+
+    def article_html_segments(self, article: Article) -> tuple[list[str], list[str]]:
+        metadata = render_resource_metadata(article)
+        if self.config.bilingual_mode == "translation_first":
+            chunks = chunk_blocks(article.content, self.config.chunk_chars)
+            originals_for_translation = [
+                *[
+                    render_portable_text(chunk, id_prefix=f"tr-{index}")
+                    for index, chunk in enumerate(chunks, start=1)
+                ],
+                metadata,
+            ]
+            originals_for_display = [
+                *[
+                    render_portable_text(chunk, id_prefix=f"orig-{index}")
+                    for index, chunk in enumerate(chunks, start=1)
+                ],
+                metadata,
+            ]
+            return originals_for_translation, originals_for_display
+
+        originals = [
+            rendered
+            for rendered in (
+                render_portable_text([block], id_prefix=f"seg-{index}")
+                for index, block in enumerate(article.content, start=1)
+            )
+            if rendered.strip()
+        ]
+        return [*originals, metadata], [*originals, metadata]
 
     def translate_many(
         self,
@@ -533,6 +552,56 @@ def chunk_blocks(blocks: list[PortableBlock], max_chars: int) -> list[list[Porta
 
 def build_bilingual_html(translated_html: str, original_html: str) -> str:
     return f'{translated_html}\n<div class="original">\n{strip_images(original_html)}\n</div>'
+
+
+def build_parallel_bilingual_html(translated_html: list[str], original_html: list[str]) -> str:
+    blocks = [
+        build_parallel_block(original, translated)
+        for original, translated in zip(original_html, translated_html, strict=True)
+        if original.strip() or translated.strip()
+    ]
+    return "\n".join(blocks)
+
+
+def build_parallel_block(original: str, translated: str) -> str:
+    original = original.strip()
+    translated = translated.strip()
+    table = interleave_table_cells(original, translated)
+    if table:
+        return table
+    translated_without_repeated_images = strip_images(translated)
+    return (
+        '<div class="bilingual-block">'
+        f'<div class="bilingual-original">{original}</div>'
+        f'<div class="bilingual-translation">{translated_without_repeated_images}</div>'
+        "</div>"
+    )
+
+
+CELL_RE = re.compile(r"(<(?P<tag>td|th)\b[^>]*>)(?P<body>.*?)(</(?P=tag)>)", re.I | re.S)
+
+
+def interleave_table_cells(original: str, translated: str) -> str:
+    original_cells = [match.group("body").strip() for match in CELL_RE.finditer(original)]
+    translated_matches = list(CELL_RE.finditer(translated))
+    if not original_cells or len(original_cells) != len(translated_matches):
+        return ""
+
+    cell_index = 0
+
+    def replace_cell(match: re.Match[str]) -> str:
+        nonlocal cell_index
+        original_body = original_cells[cell_index]
+        translated_body = match.group("body").strip()
+        cell_index += 1
+        return (
+            f"{match.group(1)}"
+            f'<div class="bilingual-cell-original">{original_body}</div>'
+            f'<div class="bilingual-cell-translation">{translated_body}</div>'
+            f"{match.group(4)}"
+        )
+
+    return CELL_RE.sub(replace_cell, translated)
 
 
 def clean_model_output(text: str) -> str:

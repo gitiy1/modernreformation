@@ -95,6 +95,11 @@ def render_article_html(article: Article, *, bilingual: bool = True) -> str:
     .original {{ color: #555; font-size: 0.92em; }}
     .original::before {{ content: "Original"; display: block; font-size: 0.72em;
       text-transform: uppercase; letter-spacing: 0.04em; color: #777; }}
+    .bilingual-block {{ margin: 1rem 0; }}
+    .bilingual-original {{ color: #555; font-size: 0.92em; }}
+    .bilingual-translation {{ margin-top: 0.25rem; }}
+    .bilingual-cell-original {{ color: #555; font-size: 0.9em; }}
+    .bilingual-cell-translation {{ margin-top: 0.25rem; }}
     hr {{ border: 0; border-top: 1px solid #ccc; margin: 1.5rem 0; }}
   </style>
 </head>

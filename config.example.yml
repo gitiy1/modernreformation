@@ -28,6 +28,7 @@ translation:
   base_url: "${OPENAI_BASE_URL}"
   model: "gemma-4-31b-it"
   target_language: "Simplified Chinese"
+  bilingual_mode: "parallel"
   request_interval_seconds: 4
   rpm: 15
   max_requests_per_run: 0
