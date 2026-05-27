@@ -130,7 +130,7 @@ def test_render_portable_text_strips_unsafe_links_and_embedded_attrs() -> None:
     assert "<a style=" not in html
 
 
-def test_render_portable_text_renders_footnotes_with_backlinks() -> None:
+def test_render_portable_text_renders_footnotes_inline_without_links() -> None:
     html = render_portable_text(
         [
             {
@@ -158,13 +158,13 @@ def test_render_portable_text_renders_footnotes_with_backlinks() -> None:
         ]
     )
 
-    assert '<sup id="fnref-1"><a href="#fn-1" class="footnote-ref">1</a></sup>' in html
-    assert '<section class="footnotes">' in html
-    assert '<li id="fn-1">Footnote text ' in html
-    assert '<a href="#fnref-1" class="footnote-backref">&larr;</a>' in html
+    assert '<sup class="footnote-ref">1</sup>' in html
+    assert '<span class="footnote-inline">[1. Footnote text]</span>' in html
+    assert 'href="#fn-' not in html
+    assert '<section class="footnotes">' not in html
 
 
-def test_render_portable_text_can_prefix_footnote_ids() -> None:
+def test_render_portable_text_inline_footnotes_ignore_prefix_ids() -> None:
     html = render_portable_text(
         [
             {
@@ -183,10 +183,9 @@ def test_render_portable_text_can_prefix_footnote_ids() -> None:
         id_prefix="chunk 1",
     )
 
-    assert 'id="chunk-1-fnref-1"' in html
-    assert 'href="#chunk-1-fn-1"' in html
-    assert 'id="chunk-1-fn-1"' in html
-    assert 'href="#chunk-1-fnref-1"' in html
+    assert '<sup class="footnote-ref">1</sup>' in html
+    assert '<span class="footnote-inline">[1. Note]</span>' in html
+    assert "href=" not in html
 
 
 def test_render_portable_text_preserves_horizontal_rule_pull_quote_and_block_image() -> None:

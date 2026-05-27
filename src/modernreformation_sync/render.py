@@ -88,9 +88,8 @@ def render_article_html(article: Article, *, bilingual: bool = True) -> str:
     .resource-label {{ color: #666; font-size: 0.76em; letter-spacing: 0.04em;
       text-transform: uppercase; margin-right: 0.4rem; }}
     .topic {{ white-space: nowrap; border-bottom: 1px solid #ddd; margin-right: 0.55rem; }}
-    .footnotes {{ font-size: 0.9em; }}
-    .footnotes li p {{ display: inline; }}
-    .footnote-backref {{ white-space: nowrap; }}
+    .footnote-ref {{ font-size: 0.75em; vertical-align: super; }}
+    .footnote-inline {{ color: #555; font-size: 0.88em; }}
     .metadata, .original-title {{ color: #555; }}
     .original {{ color: #555; font-size: 0.92em; }}
     .original::before {{ content: "Original"; display: block; font-size: 0.72em;
@@ -194,8 +193,6 @@ def render_portable_text(blocks: Iterable[PortableBlock], *, id_prefix: str = ""
                 output.append(embedded_html)
 
     close_lists()
-    if state.footnotes:
-        output.append(render_footnotes(state.footnotes, state.id_prefix))
     return "\n".join(output)
 
 
@@ -276,11 +273,10 @@ def apply_mark(
     if mark_def and mark_def.get("_type") == "footnote" and state is not None:
         note_html = render_footnote_note(mark_def.get("note"))
         number = state.add_footnote(mark, note_html)
-        footnote_id = f"{state.id_prefix}fn-{number}"
-        ref_id = f"{state.id_prefix}fnref-{number}"
+        note_text = escape(html_to_text(note_html))
         return (
-            f'{text}<sup id="{ref_id}">'
-            f'<a href="#{footnote_id}" class="footnote-ref">{number}</a></sup>'
+            f'{text}<sup class="footnote-ref">{number}</sup>'
+            f' <span class="footnote-inline">[{number}. {note_text}]</span>'
         )
     return text
 
@@ -299,25 +295,6 @@ def render_footnote_note(note: object) -> str:
     if isinstance(note, str):
         return f"<p>{escape(note)}</p>"
     return ""
-
-
-def render_footnotes(footnotes: list[tuple[int, str]], id_prefix: str = "") -> str:
-    items = []
-    for number, note_html in footnotes:
-        footnote_id = f"{id_prefix}fn-{number}"
-        ref_id = f"{id_prefix}fnref-{number}"
-        backref = f' <a href="#{ref_id}" class="footnote-backref">&larr;</a>'
-        items.append(f'<li id="{footnote_id}">{append_footnote_backref(note_html, backref)}</li>')
-    return '<section class="footnotes">\n<hr>\n<ol>\n' + "\n".join(items) + "\n</ol>\n</section>"
-
-
-def append_footnote_backref(note_html: str, backref: str) -> str:
-    stripped = note_html.strip()
-    if stripped.startswith("<p>") and stripped.endswith("</p>") and stripped.count("<p>") == 1:
-        return f"{stripped[3:-4]}{backref}"
-    if stripped.endswith("</p>"):
-        return f"{stripped[:-4]}{backref}</p>"
-    return f"{stripped}{backref}"
 
 
 def format_display_date(article: Article) -> str:
